@@ -10,10 +10,11 @@ import warnings
 class Sentiment_Analysis:
     def __init__(self, max_seq_len,
                  batch_size,
-                 with_cuda=True, # 是否使用GPU, 如未找到GPU, 则自动切换CPU
+                 with_cuda=True,  # 是否使用GPU, 如未找到GPU, 则自动切换CPU
                  ):
         config_ = configparser.ConfigParser()
         config_.read("./config/sentiment_model_config.ini")
+        self.result = {}
         self.config = config_["DEFAULT"]
         self.vocab_size = int(self.config["vocab_size"])
         self.batch_size = batch_size
@@ -46,12 +47,13 @@ class Sentiment_Analysis:
                                            max_positions=max_seq_len,
                                            word2idx=self.word2idx)
         # 加载BERT预训练模型
-        self.load_model(self.bert_model, dir_path=self.config["state_dict_dir"])
-
+        self.load_model(self.bert_model,
+                        dir_path=self.config["state_dict_dir"])
 
     def init_positional_encoding(self):
         position_enc = np.array([
-            [pos / np.power(10000, 2 * i / self.hidden_dim) for i in range(self.hidden_dim)]
+            [pos / np.power(10000, 2 * i / self.hidden_dim)
+             for i in range(self.hidden_dim)]
             if pos != 0 else np.zeros(self.hidden_dim) for pos in range(self.max_seq_len)])
 
         position_enc[1:, 0::2] = np.sin(position_enc[1:, 0::2])  # dim 2i
@@ -61,7 +63,6 @@ class Sentiment_Analysis:
         position_enc = position_enc / (denominator + 1e-8)
         position_enc = torch.from_numpy(position_enc).type(torch.FloatTensor)
         return position_enc
-
 
     def load_model(self, model, dir_path="../output"):
         checkpoint_dir = self.find_most_recent_state_dict(dir_path)
@@ -108,7 +109,6 @@ class Sentiment_Analysis:
             # 切片
             texts_tokens_ = texts_tokens[start: end].to(self.device)
 
-
             predictions = self.bert_model.forward(text_input=texts_tokens_,
                                                   positional_enc=positional_enc,
                                                   )
@@ -119,12 +119,15 @@ class Sentiment_Analysis:
 
     def sentiment_print_func(self, text, pred, threshold):
         print(text)
+        res = ""
         if pred >= threshold:
             print("正样本, 输出值{:.2f}".format(pred))
+            res = "正样本"
         else:
             print("负样本, 输出值{:.2f}".format(pred))
+            res = "负样本"
         print("----------")
-
+        self.result[text] = res + "{:.2f}".format(pred)
 
     def find_most_recent_state_dict(self, dir_path):
         """
@@ -133,12 +136,11 @@ class Sentiment_Analysis:
         """
         dic_lis = [i for i in os.listdir(dir_path)]
         if len(dic_lis) == 0:
-            raise FileNotFoundError("can not find any state dict in {}!".format(dir_path))
+            raise FileNotFoundError(
+                "can not find any state dict in {}!".format(dir_path))
         dic_lis = [i for i in dic_lis if "model" in i]
         dic_lis = sorted(dic_lis, key=lambda k: int(k.split(".")[-1]))
         return dir_path + "/" + dic_lis[-1]
-
-
 
 
 if __name__ == '__main__':
